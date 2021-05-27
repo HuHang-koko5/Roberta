@@ -191,7 +191,7 @@ def weight_init(m):
         torch.nn.init.constant_(m.bias, 0)
 
 
-def train_classifier(model, epoch, iterator, criterion, optimizer=None,
+def train_classifier(model, epoch, lr, seq, iterator, criterion, optimizer=None,
                      scheduler=None
                      ):
     loss = 0
@@ -276,6 +276,6 @@ def train_classifier(model, epoch, iterator, criterion, optimizer=None,
                                                                                  epoch_accs[-1]))
         if scheduler is not None:
             scheduler.step(loss)
-        torch.save(model.module.state_dict(), './results/{}-{}/5-18-epoch-{}.pth'.format(LEARN_RATE, MAX_SEQ_LENGTH, i))
+        torch.save(model.module.state_dict(), './results/{}-{}/5-18-epoch-{}.pth'.format(lr, seq, i))
         # torch.cuda.empty_cache()
     return accs, losses

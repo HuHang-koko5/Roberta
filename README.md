@@ -33,7 +33,7 @@ the result is so good and reach the sota of my result
 	'EPOCH': 5
 
 acc-loss chart:
-![acc-chart](/img/5e-5-128-acc-loss.jpg)
+![acc-chart](/News-Classifier/img/5e-5-128-acc-loss.jpg)
 
 heatmap:
-![heatmap](/img/5e-5-128-matrix.jpg)
+![heatmap](/News-Classifier/img/5e-5-128-matrix.jpg)

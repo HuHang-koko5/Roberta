@@ -37,3 +37,11 @@ acc-loss chart:
 
 heatmap:
 ![heatmap](/News-Classifier/img/5e-5-128-matrix.jpg)
+
+### 6-17
+
+Learning rate research
+
+lr chart:
+
+![lr_chart](/News-Classifier/img/lr-search.png)

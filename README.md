@@ -44,4 +44,4 @@ Learning rate research
 
 lr chart:
 
-![lr_chart](/News-Classifier/img/lr-search.png)
+![lr_chart](/News-Classifier/img/lr_search.png)

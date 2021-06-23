@@ -57,4 +57,4 @@ acc chart:
 
 heatmap:
 
-![heatmap-6-23](/News-Classifier/img/5e5-128-matrix.jpg)
+![heatmap-6-23](/News-Classifier/img/5e5-128-matrix-ENG.png)

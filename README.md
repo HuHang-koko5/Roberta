@@ -45,3 +45,16 @@ Learning rate research
 lr chart:
 
 ![lr_chart](/News-Classifier/img/lr_search.png)
+
+### 6-23
+
+First Train on Classification on raw english data
+
+acc chart:
+
+![acc-chart-6-23](/News-Classifier/img/5e5-128-acc-loss-ENG.png)
+
+
+heatmap:
+
+![heatmap-6-23](/News-Classifier/img/5e5-128-matrix.jpg)

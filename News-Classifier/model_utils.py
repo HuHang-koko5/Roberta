@@ -191,7 +191,7 @@ def weight_init(m):
         torch.nn.init.constant_(m.bias, 0)
 
 
-def train_classifier(model, epoch, lr, seq, iterator, criterion, optimizer=None,
+def train_classifier(model, epoch, lr, seq, iterator, criterion, date, optimizer=None,
                      scheduler=None, path='results/'
                      ):
     loss = 0

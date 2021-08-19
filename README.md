@@ -1,6 +1,6 @@
 ## Train record
 
-### this part show the result of my trian with different hyperparameter selection
+### this part show the result of my train with different hyperparameter selection
 
 ## Format
 

@@ -1,3 +1,4 @@
 *.pth
 .ipynb_checkpoints
 data/
+News-CLassifier/__pycache__/

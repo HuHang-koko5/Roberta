@@ -276,6 +276,6 @@ def train_classifier(model, epoch, lr, seq, iterator, criterion, date, optimizer
                                                                                  epoch_accs[-1]))
         if scheduler is not None:
             scheduler.step(loss)
-        torch.save(model.module.state_dict(), './{}/{}-{}/{}-epoch-{}.pth'.format(path, lr, seq, date, i))
+        torch.save(model.module.state_dict(), '{}/{}-epoch-{}.pth'.format(path, date, i))
         # torch.cuda.empty_cache()
     return accs, losses

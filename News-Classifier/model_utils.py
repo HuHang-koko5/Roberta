@@ -209,22 +209,10 @@ def train_classifier(model, epoch, lr, seq, iterator, criterion, date, optimizer
             # print(features.shape)
             att_mask = data['attention_mask'].cuda()
             y = data['targets'].cuda()
-
-            # print(y.shape)
-
             y_pred = model(features, att_mask)
-
-            # print(y_pred)
-            # print(y_pred[0].shape)
-
             loss = criterion(y_pred, y)
             loss.backward()
             optimizer.step()
-
-            # print('---------------------------------')
-
-            # print('---------------------------------')
-
             y = y.cpu().numpy()
             # print('target: ',y)
 
@@ -280,3 +268,67 @@ def train_classifier(model, epoch, lr, seq, iterator, criterion, date, optimizer
             torch.save(model.module.state_dict(), '{}/{}-epoch-{}.pth'.format(path, date, i))
         # torch.cuda.empty_cache()
     return accs, losses
+
+
+def para_compare(MODEL_NAME, cate1, model1, cate2, model2, cate3, criterion):
+    raw = RobertaForSequenceClassification(MODEL_NAME, cate1).bert
+    m1 = RobertaForSequenceClassification(MODEL_NAME, cate2)
+    state_dict = torch.load(model1)
+    m1.loda_state_dict(state_dict)
+    m2 = RobertaForSequenceClassification(MODEL_NAME, cate3)
+    state_dict = torch.load(model2)
+    m2.load_state_dict(state_dict)
+    m1 = m1.bert
+    m2 = m2.bert
+    layer_num = len(raw.encoder.layer)
+    models = []
+    models.append(raw)
+    models.append(m1)
+    models.append(m2)
+
+    paras = [[] for _ in range(3)]
+    '''
+    query = [[] for _ in range(3)]
+    query_bias = [[] for _ in range(3)]
+    key = [[] for _ in range(3)]
+    key_bias = [[] for _ in range(3)]
+    value = [[] for _ in range(3)]
+    value_bias = [[] for _ in range(3)]
+    '''
+
+    for idx in range(3):
+        for i in range(layer_num):
+            layer_para = []
+            att = models[idx].encoder.layer[i].attention)
+            para_query = list(att.self.query.parameters())
+            para_key = list(att.self.key.parameters())
+            para_value = list(att.self.value.parameters())
+            layer_para.append(para_query[0].data)
+            layer_para.append(para_query[1].data)
+            layer_para.append(para_key[0].data)
+            layer_para.append(para_key[1].data)
+            layer_para.append(para_value[0].data)
+            layer_para.append(para_value[1].data)
+        paras[idx].append(layer_para)
+
+    # Dice Loss
+    for idx in range(layer_num):
+        matrix_loss = []
+        bias_loss = []
+        print('for Layer {}:'.format(idx))
+
+        print('Query Matrix Loss 1:{}'.format(criterion(paras[0][idx][0],paras[1][idx][0]))
+        print('Query Matrix Loss 2:{}'.format(criterion(paras[0][idx][0], paras[2][idx][0]))
+        print('Query Bias Loss 1:{}'.format(criterion(paras[0][idx][1],paras[1][idx][1]))
+        print('Query Bias Loss 2:{}'.format(criterion(paras[0][idx][1], paras[2][idx][1]))
+        print('Key Matrix Loss 1:{}'.format(criterion(paras[0][idx][2],paras[1][idx][2]))
+        print('Key Matrix Loss 2:{}'.format(criterion(paras[0][idx][2], paras[2][idx][2]))
+        print('Key Bias Loss 1:{}'.format(criterion(paras[0][idx][3],paras[1][idx][3]))
+        print('Key Bias Loss 2:{}'.format(criterion(paras[0][idx][3], paras[2][idx][3]))
+        print('Value Matrix Loss 1:{}'.format(criterion(paras[0][idx][4],paras[1][idx][4]))
+        print('Value Matrix Loss 2:{}'.format(criterion(paras[0][idx][4], paras[2][idx][4]))
+        print('Value Bias Loss 1:{}'.format(criterion(paras[0][idx][5],paras[1][idx][5]))
+        print('Value Bias Loss 2:{}'.format(criterion(paras[0][idx][5], paras[2][idx][5]))
+
+    
+    

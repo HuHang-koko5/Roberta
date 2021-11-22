@@ -209,22 +209,10 @@ def train_classifier(model, epoch, lr, seq, iterator, criterion, date, optimizer
             # print(features.shape)
             att_mask = data['attention_mask'].cuda()
             y = data['targets'].cuda()
-
-            # print(y.shape)
-
             y_pred = model(features, att_mask)
-
-            # print(y_pred)
-            # print(y_pred[0].shape)
-
             loss = criterion(y_pred, y)
             loss.backward()
             optimizer.step()
-
-            # print('---------------------------------')
-
-            # print('---------------------------------')
-
             y = y.cpu().numpy()
             # print('target: ',y)
 
@@ -280,3 +268,107 @@ def train_classifier(model, epoch, lr, seq, iterator, criterion, date, optimizer
             torch.save(model.module.state_dict(), '{}/{}-epoch-{}.pth'.format(path, date, i))
         # torch.cuda.empty_cache()
     return accs, losses
+
+
+class DiceLoss(nn.Module):
+    def __init__(self, weight=None, size_average=True):
+        super(DiceLoss, self).__init__()
+
+    def forward(self, inputs, targets, smooth=1):
+        # comment out if your model contains a sigmoid or equivalent activation layer
+        # inputs = F.sigmoid(inputs)
+
+        # flatten label and prediction tensors
+        inputs = inputs.view(-1)
+        targets = targets.view(-1)
+
+        intersection = (inputs * targets).sum()
+        dice = (2. * intersection + smooth) / (inputs.sum() + targets.sum() + smooth)
+
+        return 1 - dice
+
+def para_compare(MODEL_NAME, model1, model2, criterion, cate1=24, cate2=24, cate3=24):
+    raw = RobertaForSequenceClassification(MODEL_NAME, cate1).bert
+    m1 = RobertaForSequenceClassification(model1, cate2)
+    # state_dict = torch.load(model1)
+    # m1.loda_state_dict(state_dict)
+    m2 = RobertaForSequenceClassification(model2, cate3)
+    # state_dict = torch.load(model2)
+    # m2.load_state_dict(state_dict)
+    m1 = m1.bert
+    m2 = m2.bert
+    layer_num = len(raw.encoder.layer)
+    models = []
+    models.append(raw)
+    models.append(m1)
+    models.append(m2)
+    print('models loaded')
+
+    paras = [[] for _ in range(3)]
+    '''
+    query = [[] for _ in range(3)]
+    query_bias = [[] for _ in range(3)]
+    key = [[] for _ in range(3)]
+    key_bias = [[] for _ in range(3)]
+    value = [[] for _ in range(3)]
+    value_bias = [[] for _ in range(3)]
+    '''
+
+    for idx in range(3):
+        for i in range(layer_num):
+            layer_para = []
+            att = models[idx].encoder.layer[i].attention
+            para_query = list(att.self.query.parameters())
+            para_key = list(att.self.key.parameters())
+            para_value = list(att.self.value.parameters())
+            layer_para.append(para_query[0].data)
+            layer_para.append(para_query[1].data)
+            layer_para.append(para_key[0].data)
+            layer_para.append(para_key[1].data)
+            layer_para.append(para_value[0].data)
+            layer_para.append(para_value[1].data)
+            paras[idx].append(layer_para)
+
+    print("paras-size: {} * {}: ".format(len(paras),len(paras[0])))
+    matrix_loss = []
+    bias_loss = []
+    # Dice Loss
+    for idx in range(layer_num):
+        print('for Layer {}:'.format(idx))
+        qml1 = criterion(paras[0][idx][0],paras[1][idx][0])
+        qml2 = criterion(paras[0][idx][0], paras[2][idx][0])
+        qbl1 = criterion(paras[0][idx][1],paras[1][idx][1])
+        qbl2 = criterion(paras[0][idx][1], paras[2][idx][1])
+        kml1 = criterion(paras[0][idx][2],paras[1][idx][2])
+        kml2 = criterion(paras[0][idx][2], paras[2][idx][2])
+        kbl1 = criterion(paras[0][idx][3],paras[1][idx][3])
+        kbl2 = criterion(paras[0][idx][3], paras[2][idx][3])
+        vml1 = criterion(paras[0][idx][4],paras[1][idx][4])
+        vml2 = criterion(paras[0][idx][4], paras[2][idx][4])
+        vbl1 = criterion(paras[0][idx][5],paras[1][idx][5])
+        vbl2 = criterion(paras[0][idx][5], paras[2][idx][5])
+        print('Query Matrix Loss 1:{}'.format(qml1))
+        print('Query Matrix Loss 2:{}'.format(qml2))
+        print('  Query Bias Loss 1:{}'.format(qbl1))
+        print('  Query Bias Loss 2:{}'.format(qbl2))
+        print('  Key Matrix Loss 1:{}'.format(kml1))
+        print('  Key Matrix Loss 2:{}'.format(kml2))
+        print('    Key Bias Loss 1:{}'.format(kbl1))
+        print('    Key Bias Loss 2:{}'.format(kbl2))
+        print('Value Matrix Loss 1:{}'.format(vml1))
+        print('Value Matrix Loss 2:{}'.format(vml2))
+        print('  Value Bias Loss 1:{}'.format(vbl1))
+        print('  Value Bias Loss 2:{}'.format(vbl2))
+        print("Average Matrix Loss:{} - {}".format((qml1 + kml1 + vml1) / 3, (qml2 + kml2 + vml2) / 3))
+        print("  Average Bias Loss:{} - {}".format((qbl1 + kbl1 + vbl1) / 3, (qbl2 + kbl2 + vbl2) / 3))
+
+        matrix_loss.append([qml1, qml2, kml1, kml2, vml1, vml2])
+        bias_loss.append([qbl1, qbl2, kbl1, kbl2, vbl1, vbl2])
+
+    return matrix_loss,bias_loss
+
+
+
+
+    
+    

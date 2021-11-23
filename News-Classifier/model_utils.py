@@ -185,6 +185,52 @@ class RobertaForSequenceClassification(nn.Module):
         return logits
 
 
+class FurtherPretrainClassifier(nn.Module):
+    def __init__(self, model_name, source,target_num):
+        super().__init__()
+        config = RobertaConfig.from_pretrained(model_name, num_labels=target_num)
+        self.model = RobertaForSequenceClassification(model_name,26)
+        state_dict = torch.load(source)
+        self.model.load_state_dict(state_dict)
+        print(self.model.MLP)
+        self.model.MLP = nn.Linear(config.hidden_size, target_num)
+        self.model.MLP.apply(weight_init)
+
+    def forward(self, features, attention_mask=None, head_mask=None):
+        assert attention_mask is not None, 'attention_mask is none'
+        bert_output = self.model.bert(input_ids=features,
+                                attention_mask=attention_mask,
+                                head_mask=head_mask)
+
+        hidden_state = bert_output[0]
+
+        pool_output = hidden_state[:, 0]
+        # print(pool_output)
+        # print(pool_output.shape)
+        logits = self.model.MLP(pool_output)
+        # logits.unsqueeze(1)
+        return logits
+
+class FurtherClassifier(nn.Module):
+    def __init__(self, model_name, source_num, target_num):
+        super().__init__()
+        config = RobertaConfig.from_pretrained(model_name, num_labels=target_num)
+        self.model = RobertaForSequenceClassification(model_name,source_num)
+        self.model.MLP = nn.Linear(config.hidden_size, target_num)
+        self.model.MLP.apply(weight_init)
+
+    def forward(self, features, attention_mask=None, head_mask=None):
+        assert attention_mask is not None, 'attention_mask is none'
+        bert_output = self.model.bert(input_ids=features,
+                                attention_mask=attention_mask,
+                                head_mask=head_mask)
+
+        hidden_state = bert_output[0]
+
+        pool_output = hidden_state[:, 0]
+        logits = self.model.MLP(pool_output)
+        return logits
+
 def weight_init(m):
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform_(m.weight)
@@ -289,14 +335,14 @@ class DiceLoss(nn.Module):
 
 def para_compare(MODEL_NAME, model1, model2, criterion, cate1=24, cate2=24, cate3=24):
     raw = RobertaForSequenceClassification(MODEL_NAME, cate1).bert
-    m1 = RobertaForSequenceClassification(model1, cate2)
-    # state_dict = torch.load(model1)
-    # m1.loda_state_dict(state_dict)
-    m2 = RobertaForSequenceClassification(model2, cate3)
-    # state_dict = torch.load(model2)
-    # m2.load_state_dict(state_dict)
+    m1 = RobertaForSequenceClassification(MODEL_NAME, cate2)
+    state_dict = torch.load(model1)
+    m1.load_state_dict(state_dict)
+    m2 = FurtherClassifier(MODEL_NAME, cate1, cate3)
+    state_dict = torch.load(model2)
+    m2.load_state_dict(state_dict)
     m1 = m1.bert
-    m2 = m2.bert
+    m2 = m2.model.bert
     layer_num = len(raw.encoder.layer)
     models = []
     models.append(raw)

@@ -333,7 +333,7 @@ class DiceLoss(nn.Module):
 
         return 1 - dice
 
-def para_compare(MODEL_NAME, pmodel, cmodels, criterion, cates):
+def para_compare(MODEL_NAME, pmodel, cmodels, criterion, model_type, cates):
     raw = RobertaForSequenceClassification(MODEL_NAME, cates[0]).bert
     # Newscate pretrained model
     models = []
@@ -344,10 +344,18 @@ def para_compare(MODEL_NAME, pmodel, cmodels, criterion, cates):
     models.append(pm.bert)
 
     for idx in range(len(cmodels)):
-        cmodel = FurtherClassifier(MODEL_NAME, cates[0], cates[idx+1])
-        state_dict = torch.load(cmodels[idx])
-        cmodel.load_state_dict(state_dict)
-        cmodel = cmodel.bert
+        if model_type[idx]:
+            cmodel = FurtherClassifier(MODEL_NAME, cates[0], cates[idx+1])
+            state_dict = torch.load(cmodels[idx])
+            cmodel.load_state_dict(state_dict)
+            cmodel = cmodel.model.bert
+        else:
+            cmodel = RobertaForSequenceClassification(MODEL_NAME,cates[idx+1])
+            state_dict = torch.load(cmodels[idx])
+            cmodel.load_state_dict(state_dict)
+            cmodel = cmodel.bert
+        models.append(cmodel)
+        print('compare model {} loaded'.format(idx))
 
     layer_num = len(raw.encoder.layer)
     print('models loaded')
@@ -375,7 +383,7 @@ def para_compare(MODEL_NAME, pmodel, cmodels, criterion, cates):
     bias_loss = [[] for _ in range(model_num)]
     # criterion Loss
     for idx in range(layer_num):
-        print('for Layer {}:'.format(idx))
+        #print('for Layer {}:'.format(idx))
         for i in range(1, model_num):
             qml = criterion(paras[0][idx][0],paras[i][idx][0])
             qbl = criterion(paras[0][idx][1],paras[i][idx][1])

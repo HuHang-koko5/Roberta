@@ -333,34 +333,29 @@ class DiceLoss(nn.Module):
 
         return 1 - dice
 
-def para_compare(MODEL_NAME, model1, model2, criterion, cate1=24, cate2=24, cate3=24):
-    raw = RobertaForSequenceClassification(MODEL_NAME, cate1).bert
-    m1 = RobertaForSequenceClassification(MODEL_NAME, cate2)
-    state_dict = torch.load(model1)
-    m1.load_state_dict(state_dict)
-    m2 = FurtherClassifier(MODEL_NAME, cate1, cate3)
-    state_dict = torch.load(model2)
-    m2.load_state_dict(state_dict)
-    m1 = m1.bert
-    m2 = m2.model.bert
-    layer_num = len(raw.encoder.layer)
+def para_compare(MODEL_NAME, pmodel, cmodels, criterion, cates):
+    raw = RobertaForSequenceClassification(MODEL_NAME, cates[0]).bert
+    # Newscate pretrained model
     models = []
+    pm = RobertaForSequenceClassification(MODEL_NAME, cates[0])
+    state_dict = torch.load(pmodel)
+    pm.load_state_dict(state_dict)
     models.append(raw)
-    models.append(m1)
-    models.append(m2)
+    models.append(pm.bert)
+
+    for idx in range(len(cmodels)):
+        cmodel = FurtherClassifier(MODEL_NAME, cates[0], cates[idx+1])
+        state_dict = torch.load(cmodels[idx])
+        cmodel.load_state_dict(state_dict)
+        cmodel = cmodel.bert
+
+    layer_num = len(raw.encoder.layer)
     print('models loaded')
+    model_num = len(models)
+    paras = [[] for _ in range(model_num)]
 
-    paras = [[] for _ in range(3)]
-    '''
-    query = [[] for _ in range(3)]
-    query_bias = [[] for _ in range(3)]
-    key = [[] for _ in range(3)]
-    key_bias = [[] for _ in range(3)]
-    value = [[] for _ in range(3)]
-    value_bias = [[] for _ in range(3)]
-    '''
 
-    for idx in range(3):
+    for idx in range(model_num):
         for i in range(layer_num):
             layer_para = []
             att = models[idx].encoder.layer[i].attention
@@ -376,40 +371,37 @@ def para_compare(MODEL_NAME, model1, model2, criterion, cate1=24, cate2=24, cate
             paras[idx].append(layer_para)
 
     print("paras-size: {} * {}: ".format(len(paras),len(paras[0])))
-    matrix_loss = []
-    bias_loss = []
-    # Dice Loss
+    matrix_loss = [[] for _ in range(model_num)]
+    bias_loss = [[] for _ in range(model_num)]
+    # criterion Loss
     for idx in range(layer_num):
         print('for Layer {}:'.format(idx))
-        qml1 = criterion(paras[0][idx][0],paras[1][idx][0])
-        qml2 = criterion(paras[0][idx][0], paras[2][idx][0])
-        qbl1 = criterion(paras[0][idx][1],paras[1][idx][1])
-        qbl2 = criterion(paras[0][idx][1], paras[2][idx][1])
-        kml1 = criterion(paras[0][idx][2],paras[1][idx][2])
-        kml2 = criterion(paras[0][idx][2], paras[2][idx][2])
-        kbl1 = criterion(paras[0][idx][3],paras[1][idx][3])
-        kbl2 = criterion(paras[0][idx][3], paras[2][idx][3])
-        vml1 = criterion(paras[0][idx][4],paras[1][idx][4])
-        vml2 = criterion(paras[0][idx][4], paras[2][idx][4])
-        vbl1 = criterion(paras[0][idx][5],paras[1][idx][5])
-        vbl2 = criterion(paras[0][idx][5], paras[2][idx][5])
-        print('Query Matrix Loss 1:{}'.format(qml1))
-        print('Query Matrix Loss 2:{}'.format(qml2))
-        print('  Query Bias Loss 1:{}'.format(qbl1))
-        print('  Query Bias Loss 2:{}'.format(qbl2))
-        print('  Key Matrix Loss 1:{}'.format(kml1))
-        print('  Key Matrix Loss 2:{}'.format(kml2))
-        print('    Key Bias Loss 1:{}'.format(kbl1))
-        print('    Key Bias Loss 2:{}'.format(kbl2))
-        print('Value Matrix Loss 1:{}'.format(vml1))
-        print('Value Matrix Loss 2:{}'.format(vml2))
-        print('  Value Bias Loss 1:{}'.format(vbl1))
-        print('  Value Bias Loss 2:{}'.format(vbl2))
-        print("Average Matrix Loss:{} - {}".format((qml1 + kml1 + vml1) / 3, (qml2 + kml2 + vml2) / 3))
-        print("  Average Bias Loss:{} - {}".format((qbl1 + kbl1 + vbl1) / 3, (qbl2 + kbl2 + vbl2) / 3))
+        for i in range(1, model_num):
+            qml = criterion(paras[0][idx][0],paras[i][idx][0])
+            qbl = criterion(paras[0][idx][1],paras[i][idx][1])
+            kml = criterion(paras[0][idx][2],paras[i][idx][2])
+            kbl = criterion(paras[0][idx][3],paras[i][idx][3])
+            vml = criterion(paras[0][idx][4],paras[i][idx][4])
+            vbl = criterion(paras[0][idx][5],paras[i][idx][5])
+            matrix_loss[i].append([qml, kml, vml])
+            bias_loss[i].append([qbl, kbl, vbl])
+        '''
+            print('Query Matrix Loss 1:{}'.format(qml1))
+            print('Query Matrix Loss 2:{}'.format(qml2))
+            print('  Query Bias Loss 1:{}'.format(qbl1))
+            print('  Query Bias Loss 2:{}'.format(qbl2))
+            print('  Key Matrix Loss 1:{}'.format(kml1))
+            print('  Key Matrix Loss 2:{}'.format(kml2))
+            print('    Key Bias Loss 1:{}'.format(kbl1))
+            print('    Key Bias Loss 2:{}'.format(kbl2))
+            print('Value Matrix Loss 1:{}'.format(vml1))
+            print('Value Matrix Loss 2:{}'.format(vml2))
+            print('  Value Bias Loss 1:{}'.format(vbl1))
+            print('  Value Bias Loss 2:{}'.format(vbl2))
+            print("Average Matrix Loss:{} - {}".format((qml1 + kml1 + vml1) / 3, (qml2 + kml2 + vml2) / 3))
+            print("  Average Bias Loss:{} - {}".format((qbl1 + kbl1 + vbl1) / 3, (qbl2 + kbl2 + vbl2) / 3))
+        '''
 
-        matrix_loss.append([qml1, qml2, kml1, kml2, vml1, vml2])
-        bias_loss.append([qbl1, qbl2, kbl1, kbl2, vbl1, vbl2])
 
     return matrix_loss,bias_loss
 

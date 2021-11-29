@@ -184,7 +184,41 @@ class RobertaForSequenceClassification(nn.Module):
         # logits.unsqueeze(1)
         return logits
 
+# to get output from all layers
+class LayeredRoberta(nn.Module):
+    def __init__(self,model_name,model_typem,source=None):
+        super().__init__()
+        if model_type == 'raw':
+            config = RobertaConfig.from_pretrained(model_name)
+            self.bert = AutoModel.from_pretrained(model_name,config=config)
+        if model_type == 'trained':
+            config = RobertaConfig.from_pretrained(model_name,num_labels=7)
+            self.model = RobertaForSequenceClassification(model_name,config=config)
+            state_dict = torch.load(source)
+            self.model.load_state_dict(state_dict)
 
+    def forward(self, features, attention_mask=None, head_mask=None):
+        assert attention_mask is not None, 'attention_mask is none'
+        
+        bert_outputs = []
+        for layer in model.bert.encoder.layer:
+            
+        bert_output = self.model.bert(input_ids=features,
+                                      attention_mask=attention_mask,
+                                      head_mask=head_mask)
+
+        hidden_state = bert_output[0]
+
+        pool_output = hidden_state[:, 0]
+        # print(pool_output)
+        # print(pool_output.shape)
+        logits = self.model.MLP(pool_output)
+        # logits.unsqueeze(1)
+        return logits
+            
+            
+            
+            
 class FurtherPretrainClassifier(nn.Module):
     def __init__(self, model_name, source,target_num):
         super().__init__()
@@ -224,7 +258,6 @@ class FurtherClassifier(nn.Module):
         bert_output = self.model.bert(input_ids=features,
                                 attention_mask=attention_mask,
                                 head_mask=head_mask)
-
         hidden_state = bert_output[0]
 
         pool_output = hidden_state[:, 0]

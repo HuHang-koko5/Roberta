@@ -237,6 +237,33 @@ class RobertaForSequenceClassification(nn.Module):
 
 
 class FurtherPretrainClassifier(nn.Module):
+    def __init__(self, source, source_num, target_num, load_mlp=False):
+        super().__init__()
+
+        config = RobertaConfig.from_pretrained(source, num_labels=source_num)
+        self.bert,self.MLP = AutoModel.from_pretrained(source, config=config).bert,AutoModel.from_pretrained(source, config=config).MLP
+        # init a un-trained model for train
+        if load_mlp:
+            self.MLP = nn.Linear(config.hidden_size,target_num)
+
+
+    def forward(self, features, attention_mask=None, head_mask=None):
+        assert attention_mask is not None, 'attention_mask is none'
+        bert_output = self.bert(input_ids=features,
+                                      attention_mask=attention_mask,
+                                      head_mask=head_mask)
+
+        hidden_state = bert_output[0]
+
+        pool_output = hidden_state[:, 0]
+        # print(pool_output)
+        # print(pool_output.shape)
+        logits = self.MLP(pool_output)
+        # logits.unsqueeze(1)
+        return logits
+
+'''
+class FurtherPretrainClassifier(nn.Module):
     def __init__(self, model_name, source, target_num):
         super().__init__()
         config = RobertaConfig.from_pretrained(model_name, num_labels=target_num)
@@ -263,7 +290,7 @@ class FurtherPretrainClassifier(nn.Module):
         logits = self.MLP(pool_output)
         # logits.unsqueeze(1)
         return logits
-
+'''
 
 class FurtherClassifier(nn.Module):
     def __init__(self, model_name, source_num, target_num):
@@ -400,7 +427,7 @@ def para_compare(MODEL_NAME, pmodel, cmodels, criterion, model_type, cates):
 
     for idx in range(len(cmodels)):
         if model_type[idx]:
-            cmodel = RobertaForSequenceClassification(MODEL_NAME,cates[idx + 1])
+            cmodel = FurtherPretrainClassifier(MODEL_NAME,cates[idx + 1])
             state_dict = torch.load(cmodels[idx])
             cmodel.load_state_dict(state_dict)
             cmodel = cmodel.bert

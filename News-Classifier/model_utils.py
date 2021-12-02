@@ -465,7 +465,9 @@ def para_compare(MODEL_NAME, pmodel, cmodels, criterion, model_type, cates):
             layer_para.append(para_value[1].data)
             paras[idx].append(layer_para)
 
+
     print("paras-size: {} * {} * {}: ".format(len(paras), len(paras[0]), len(paras[0][0])))
+
     matrix_loss = [[] for _ in range(model_num)]
     bias_loss = [[] for _ in range(model_num)]
     # criterion Loss
@@ -497,6 +499,7 @@ def para_compare(MODEL_NAME, pmodel, cmodels, criterion, model_type, cates):
             print("  Average Bias Loss:{} - {}".format((qbl1 + kbl1 + vbl1) / 3, (qbl2 + kbl2 + vbl2) / 3))
         '''
     return matrix_loss, bias_loss
+
 
 
 

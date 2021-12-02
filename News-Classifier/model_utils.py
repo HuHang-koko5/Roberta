@@ -66,6 +66,57 @@ def load_data(path, cate_size, type='JSON', percentage=1):
     print('Data loaded: ', len(flitered_labels), len(flitered_contents))
     return labels, contents, label_set, label_dic
 
+def load_test_data(path,cate_size,type='JSON',percentage=1):
+    # if already combined
+    if type == "JSON":
+        df = pd.read_json(path)
+    else:
+        df = pd.read_csv(path)
+    df = df.iloc[np.random.permutation(len(df))]
+    labels = df['category'].tolist()
+    contents = df['content'].tolist()
+    label_dic = {}
+    label_count = {}
+    final_size = int(len(contents) * percentage)
+    if percentage != 1:
+        contents = contents[:final_size]
+        labels = labels[:final_size]
+
+    # itos
+    label_set = ['economia',  # economic
+              'internacional',  # international
+              'deportes',  # sports
+              'cultura',  # culture
+              'television',  # television
+              'ciencia-y-salud',  # science and health
+              'tecnologia',  # technology
+               ]
+    # stoi
+    for idx, label in enumerate(label_set):
+        label_dic[label] = idx
+    flitered_labels = []
+    flitered_contents = []
+    for cate, cont in zip(labels, contents):
+        if cate not in label_count.keys():
+            label_count[cate] = 1
+            flitered_labels.append(cate)
+            flitered_contents.append(cont)
+        elif label_count[cate] < cate_size:
+            label_count[cate] += 1
+            flitered_labels.append(cate)
+            flitered_contents.append(cont)
+    # shuffle
+    idx_list = list(range(0, len(flitered_labels), 1))
+    random.shuffle(idx_list)
+    labels = []
+    contents = []
+    for idp in idx_list:
+        labels.append(flitered_labels[idp])
+        contents.append(flitered_contents[idp])
+    print('Data loaded: ', len(flitered_labels), len(flitered_contents))
+    return labels, contents, label_set, label_dic
+    
+
 
 def pre_encode_dic(model_name, contents, max_length=512):
     try:
@@ -186,50 +237,81 @@ class RobertaForSequenceClassification(nn.Module):
 
 
 class FurtherPretrainClassifier(nn.Module):
-    def __init__(self, model_name, source,target_num):
+    def __init__(self, source, source_num, target_num, load_mlp=False):
         super().__init__()
-        config = RobertaConfig.from_pretrained(model_name, num_labels=target_num)
-        self.model = RobertaForSequenceClassification(model_name,26)
-        state_dict = torch.load(source)
-        self.model.load_state_dict(state_dict)
-        print(self.model.MLP)
-        self.model.MLP = nn.Linear(config.hidden_size, target_num)
-        self.model.MLP.apply(weight_init)
+
+        config = RobertaConfig.from_pretrained(source, num_labels=source_num)
+        self.bert,self.MLP = AutoModel.from_pretrained(source, config=config).bert,AutoModel.from_pretrained(source, config=config).MLP
+        # init a un-trained model for train
+        if load_mlp:
+            self.MLP = nn.Linear(config.hidden_size,target_num)
+
 
     def forward(self, features, attention_mask=None, head_mask=None):
         assert attention_mask is not None, 'attention_mask is none'
-        bert_output = self.model.bert(input_ids=features,
-                                attention_mask=attention_mask,
-                                head_mask=head_mask)
+        bert_output = self.bert(input_ids=features,
+                                      attention_mask=attention_mask,
+                                      head_mask=head_mask)
 
         hidden_state = bert_output[0]
 
         pool_output = hidden_state[:, 0]
         # print(pool_output)
         # print(pool_output.shape)
-        logits = self.model.MLP(pool_output)
+        logits = self.MLP(pool_output)
         # logits.unsqueeze(1)
         return logits
+
+'''
+class FurtherPretrainClassifier(nn.Module):
+    def __init__(self, model_name, source, target_num):
+        super().__init__()
+        config = RobertaConfig.from_pretrained(model_name, num_labels=target_num)
+        self.model = RobertaForSequenceClassification(model_name, 26)
+        state_dict = torch.load(source)
+        self.model.load_state_dict(state_dict)
+        print(self.model.MLP)
+        self.model.MLP = nn.Linear(config.hidden_size, target_num)
+        self.model.MLP.apply(weight_init)
+        self.bert = self.model.bert
+        self.MLP = self.model.MLP
+
+    def forward(self, features, attention_mask=None, head_mask=None):
+        assert attention_mask is not None, 'attention_mask is none'
+        bert_output = self.bert(input_ids=features,
+                                      attention_mask=attention_mask,
+                                      head_mask=head_mask)
+
+        hidden_state = bert_output[0]
+
+        pool_output = hidden_state[:, 0]
+        # print(pool_output)
+        # print(pool_output.shape)
+        logits = self.MLP(pool_output)
+        # logits.unsqueeze(1)
+        return logits
+'''
 
 class FurtherClassifier(nn.Module):
     def __init__(self, model_name, source_num, target_num):
         super().__init__()
         config = RobertaConfig.from_pretrained(model_name, num_labels=target_num)
-        self.model = RobertaForSequenceClassification(model_name,source_num)
+        self.model = RobertaForSequenceClassification(model_name, source_num)
         self.model.MLP = nn.Linear(config.hidden_size, target_num)
         self.model.MLP.apply(weight_init)
 
     def forward(self, features, attention_mask=None, head_mask=None):
         assert attention_mask is not None, 'attention_mask is none'
         bert_output = self.model.bert(input_ids=features,
-                                attention_mask=attention_mask,
-                                head_mask=head_mask)
+                                      attention_mask=attention_mask,
+                                      head_mask=head_mask)
 
         hidden_state = bert_output[0]
 
         pool_output = hidden_state[:, 0]
         logits = self.model.MLP(pool_output)
         return logits
+
 
 def weight_init(m):
     if isinstance(m, nn.Linear):
@@ -304,7 +386,6 @@ def train_classifier(model, epoch, lr, seq, iterator, criterion, date, optimizer
                     print('true: ',lset[targets[i]])
                     print('--------------')
                 '''
-
             valid_acc = sum([1 if y == p else 0 for y, p in zip(pred_outputs, true_labels)]) / len(true_labels)
             print('After Epoch {} , valid acc: {}, avg loss{}  avg acc{}'.format(i, valid_acc, epoch_losses[-1],
                                                                                  epoch_accs[-1]))
@@ -333,6 +414,7 @@ class DiceLoss(nn.Module):
 
         return 1 - dice
 
+
 def para_compare(MODEL_NAME, pmodel, cmodels, criterion, model_type, cates):
     raw = RobertaForSequenceClassification(MODEL_NAME, cates[0]).bert
     # Newscate pretrained model
@@ -345,12 +427,18 @@ def para_compare(MODEL_NAME, pmodel, cmodels, criterion, model_type, cates):
 
     for idx in range(len(cmodels)):
         if model_type[idx]:
-            cmodel = FurtherClassifier(MODEL_NAME, cates[0], cates[idx+1])
+            cmodel = FurtherPretrainClassifier(MODEL_NAME,cates[idx + 1])
+            state_dict = torch.load(cmodels[idx])
+            cmodel.load_state_dict(state_dict)
+            cmodel = cmodel.bert
+            '''
+            cmodel = FurtherClassifier(MODEL_NAME, cates[0], cates[idx + 1])
             state_dict = torch.load(cmodels[idx])
             cmodel.load_state_dict(state_dict)
             cmodel = cmodel.model.bert
+            '''
         else:
-            cmodel = RobertaForSequenceClassification(MODEL_NAME,cates[idx+1])
+            cmodel = RobertaForSequenceClassification(MODEL_NAME, cates[idx + 1])
             state_dict = torch.load(cmodels[idx])
             cmodel.load_state_dict(state_dict)
             cmodel = cmodel.bert
@@ -361,7 +449,6 @@ def para_compare(MODEL_NAME, pmodel, cmodels, criterion, model_type, cates):
     print('models loaded')
     model_num = len(models)
     paras = [[] for _ in range(model_num)]
-
 
     for idx in range(model_num):
         for i in range(layer_num):
@@ -378,19 +465,21 @@ def para_compare(MODEL_NAME, pmodel, cmodels, criterion, model_type, cates):
             layer_para.append(para_value[1].data)
             paras[idx].append(layer_para)
 
-    print("paras-size: {} * {} * {}: ".format(len(paras),len(paras[0]),len(paras[0][0])))
+
+    print("paras-size: {} * {} * {}: ".format(len(paras), len(paras[0]), len(paras[0][0])))
+
     matrix_loss = [[] for _ in range(model_num)]
     bias_loss = [[] for _ in range(model_num)]
     # criterion Loss
     for idx in range(layer_num):
-        #print('for Layer {}:'.format(idx))
+        # print('for Layer {}:'.format(idx))
         for i in range(1, model_num):
-            qml = criterion(paras[0][idx][0],paras[i][idx][0])
-            qbl = criterion(paras[0][idx][1],paras[i][idx][1])
-            kml = criterion(paras[0][idx][2],paras[i][idx][2])
-            kbl = criterion(paras[0][idx][3],paras[i][idx][3])
-            vml = criterion(paras[0][idx][4],paras[i][idx][4])
-            vbl = criterion(paras[0][idx][5],paras[i][idx][5])
+            qml = criterion(paras[0][idx][0], paras[i][idx][0])
+            qbl = criterion(paras[0][idx][1], paras[i][idx][1])
+            kml = criterion(paras[0][idx][2], paras[i][idx][2])
+            kbl = criterion(paras[0][idx][3], paras[i][idx][3])
+            vml = criterion(paras[0][idx][4], paras[i][idx][4])
+            vbl = criterion(paras[0][idx][5], paras[i][idx][5])
             matrix_loss[i].append([qml, kml, vml])
             bias_loss[i].append([qbl, kbl, vbl])
         '''
@@ -409,7 +498,8 @@ def para_compare(MODEL_NAME, pmodel, cmodels, criterion, model_type, cates):
             print("Average Matrix Loss:{} - {}".format((qml1 + kml1 + vml1) / 3, (qml2 + kml2 + vml2) / 3))
             print("  Average Bias Loss:{} - {}".format((qbl1 + kbl1 + vbl1) / 3, (qbl2 + kbl2 + vbl2) / 3))
         '''
-    return matrix_loss,bias_loss
+    return matrix_loss, bias_loss
+
 
 
 

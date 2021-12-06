@@ -195,6 +195,7 @@ class BertForSequenceClassification(nn.Module):
         config = RobertaConfig.from_pretrained(model_name, num_labels=num_classes)
         self.bert = AutoModel.from_pretrained(model_name, config=config)
         self.MLP = nn.Linear(config.hidden_size, num_classes)
+        self.MLP.apply(weight_init)
 
     def forward(self, features, attention_mask=None, head_mask=None):
         assert attention_mask is not None, 'attention_mask is none'
@@ -215,43 +216,24 @@ class BertForSequenceClassification(nn.Module):
 class RobertaForSequenceClassification(nn.Module):
     def __init__(self, model_name, num_classes=None):
         super().__init__()
-        config = RobertaConfig.from_pretrained(model_name, num_labels=num_classes)
+        self.config = RobertaConfig.from_pretrained(model_name, num_labels=num_classes)
+        self.model_name = model_name
+        self.bert = AutoModel.from_pretrained(model_name, config=self.config)
+        self.MLP = nn.Linear(self.config.hidden_size, num_classes)
 
-        self.bert = AutoModel.from_pretrained(model_name, config=config)
-        self.MLP = nn.Linear(config.hidden_size, num_classes)
+    def load_dict(self,source,source_num,keep_mlp):
+        source_model = RobertaForSequenceClassification(self.model_name,source_num)
+        st_dict = torch.load(source)
+        source_model.load_state_dict(st_dict)
+        self.bert = source_model.bert
+        if keep_mlp:
+            self.MLP = source_model.MLP
 
     def forward(self, features, attention_mask=None, head_mask=None):
         assert attention_mask is not None, 'attention_mask is none'
         bert_output = self.bert(input_ids=features,
                                 attention_mask=attention_mask,
                                 head_mask=head_mask)
-
-        hidden_state = bert_output[0]
-
-        pool_output = hidden_state[:, 0]
-        # print(pool_output)
-        # print(pool_output.shape)
-        logits = self.MLP(pool_output)
-        # logits.unsqueeze(1)
-        return logits
-
-
-class FurtherPretrainClassifier(nn.Module):
-    def __init__(self, source, source_num, target_num, load_mlp=False):
-        super().__init__()
-
-        config = RobertaConfig.from_pretrained(source, num_labels=source_num)
-        self.bert,self.MLP = AutoModel.from_pretrained(source, config=config).bert,AutoModel.from_pretrained(source, config=config).MLP
-        # init a un-trained model for train
-        if load_mlp:
-            self.MLP = nn.Linear(config.hidden_size,target_num)
-
-
-    def forward(self, features, attention_mask=None, head_mask=None):
-        assert attention_mask is not None, 'attention_mask is none'
-        bert_output = self.bert(input_ids=features,
-                                      attention_mask=attention_mask,
-                                      head_mask=head_mask)
 
         hidden_state = bert_output[0]
 
@@ -290,7 +272,6 @@ class FurtherPretrainClassifier(nn.Module):
         logits = self.MLP(pool_output)
         # logits.unsqueeze(1)
         return logits
-'''
 
 class FurtherClassifier(nn.Module):
     def __init__(self, model_name, source_num, target_num):
@@ -311,7 +292,7 @@ class FurtherClassifier(nn.Module):
         pool_output = hidden_state[:, 0]
         logits = self.model.MLP(pool_output)
         return logits
-
+'''
 
 def weight_init(m):
     if isinstance(m, nn.Linear):
@@ -415,34 +396,19 @@ class DiceLoss(nn.Module):
         return 1 - dice
 
 
-def para_compare(MODEL_NAME, pmodel, cmodels, criterion, model_type, cates):
-    raw = RobertaForSequenceClassification(MODEL_NAME, cates[0]).bert
+def para_compare(MODEL_NAME, pmodel, cmodels, criterion, cates):
+    raw = RobertaForSequenceClassification(MODEL_NAME, 26).bert
     # Newscate pretrained model
     models = []
-    pm = RobertaForSequenceClassification(MODEL_NAME, cates[0])
-    state_dict = torch.load(pmodel)
-    pm.load_state_dict(state_dict)
+    pm = RobertaForSequenceClassification(MODEL_NAME, 26)
+    pm.load_dict(pmodel, 26, True)
     models.append(raw)
     models.append(pm.bert)
 
     for idx in range(len(cmodels)):
-        if model_type[idx]:
-            cmodel = FurtherPretrainClassifier(MODEL_NAME,cates[idx + 1])
-            state_dict = torch.load(cmodels[idx])
-            cmodel.load_state_dict(state_dict)
-            cmodel = cmodel.bert
-            '''
-            cmodel = FurtherClassifier(MODEL_NAME, cates[0], cates[idx + 1])
-            state_dict = torch.load(cmodels[idx])
-            cmodel.load_state_dict(state_dict)
-            cmodel = cmodel.model.bert
-            '''
-        else:
-            cmodel = RobertaForSequenceClassification(MODEL_NAME, cates[idx + 1])
-            state_dict = torch.load(cmodels[idx])
-            cmodel.load_state_dict(state_dict)
-            cmodel = cmodel.bert
-        models.append(cmodel)
+        cmodel = RobertaForSequenceClassification(MODEL_NAME, cates[idx])
+        cmodel.load_dict(cmodels[idx],cates[idx],True)
+        models.append(cmodel.bert)
         print('compare model {} loaded'.format(idx))
 
     layer_num = len(raw.encoder.layer)

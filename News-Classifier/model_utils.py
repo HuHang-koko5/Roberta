@@ -16,7 +16,7 @@ import os
 
 # load json/csv data
 
-def load_data(path, cate_size, type='JSON', percentage=1):
+def load_data(path, cate_size,label_set, type='JSON', percentage=1):
     if type == 'JSON':
         df = pd.read_json(path)
     else:
@@ -32,14 +32,6 @@ def load_data(path, cate_size, type='JSON', percentage=1):
     if percentage != 1:
         contents = contents[:final_size]
         labels = labels[:final_size]
-    # itos                                        
-    label_set = ['WORLD NEWS', 'ARTS & CULTURE', 'WEDDINGS', 'PARENTING',
-                 'BUSINESS & FINANCES', 'HOME & LIVING', 'EDUCATION',
-                 'WELLNESS', 'POLITICS', 'WOMEN', 'IMPACT', 'ENVIRONMENT',
-                 'SPORTS', 'FOOD & DRINK', 'GROUPS VOICES', 'MEDIA',
-                 'SCIENCE & TECH', 'CRIME', 'WEIRD NEWS', 'COMEDY',
-                 'RELIGION', 'MISCELLANEOUS', 'DIVORCE', 'ENTERTAINMENT',
-                 'STYLE & BEAUTY', 'TRAVEL']
 
     # stoi
     for idx, label in enumerate(label_set):
